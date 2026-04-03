@@ -1202,7 +1202,7 @@ def render_sleeping():
         <div style="font-size: 4rem; margin-bottom: 16px;">\U0001F634</div>
         <div style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; color: #ffd700; margin-bottom: 12px;">The game is sleeping...</div>
         <div style="font-family: 'Inter', sans-serif; font-size: 1rem; color: #8fa8c0; line-height: 1.6;">
-            A to Z: UK is available daily from <strong>08:00</strong> to <strong>22:00 UTC</strong>.<br>
+            A to Z: UK is available daily from <strong>08:00</strong> to <strong>20:00 BST</strong>.<br>
             The database is powered by Snowflake Postgres and takes a well-earned rest overnight.<br><br>
             Come back tomorrow morning and test your UK geography knowledge!
         </div>
