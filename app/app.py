@@ -100,7 +100,7 @@ GAME_CSS = """
 .place-tooltip {
     display: none;
     position: absolute;
-    bottom: 130%;
+    top: 130%;
     left: 50%;
     transform: translateX(-50%);
     background: #1e2d3d;
@@ -417,7 +417,7 @@ def get_connection():
     host = os.getenv("PG_HOST", "localhost")
     port = int(os.getenv("PG_PORT", "5432"))
     dbname = os.getenv("PG_DB", "az_game")
-    user = os.getenv("PG_USER", "postgres")
+    user = os.getenv("PG_USER", "pgardner")
     password = os.getenv("PG_PASSWORD", "")
     return psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password)
 
@@ -493,6 +493,7 @@ def init_session_state():
         "distance_challenge_data": None,
         "distance_bonus_total": 0,
         "distance_challenges_won": 0,
+        "classification_feedback": None,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -684,7 +685,7 @@ def render_start_screen():
 1. For each letter of the alphabet, **name a real place** in the UK
 2. Cities are worth **10 pts**, Towns **5 pts**, Villages **3 pts**, Hamlets **2 pts**
 3. After a correct name, **classify the place type** for a **+5 bonus**
-4. **Distance challenge**: after claiming 2+ places, guess the distance between them for **up to +10 bonus** (PostGIS spatial calculation)
+4. **Distance challenge**: after claiming 2+ places, guess the distance between them **as the crow flies** for **up to +10 bonus** (PostGIS spatial calculation)
 5. Build a **streak** by answering consecutive letters correctly
 6. Use **hints** if you're stuck — they reveal the county and first two letters
             """)
@@ -718,9 +719,28 @@ def handle_correct_answer(result, type_guess):
     st.session_state.streak += 1
     st.session_state.best_streak = max(st.session_state.best_streak, st.session_state.streak)
     st.session_state.letters_completed.append(letter)
-    if is_type_bonus:
-        st.session_state.type_bonus_letters.append(letter)
-        st.session_state.classified_count += 1
+    if type_guess:
+        actual_type = place["type"]
+        if is_type_bonus:
+            st.session_state.type_bonus_letters.append(letter)
+            st.session_state.classified_count += 1
+            st.session_state.classification_feedback = {
+                "correct": True,
+                "place": place["name"],
+                "guessed": type_guess,
+                "actual": actual_type,
+                "points": points,
+            }
+        else:
+            st.session_state.classification_feedback = {
+                "correct": False,
+                "place": place["name"],
+                "guessed": type_guess,
+                "actual": actual_type,
+                "points": points,
+            }
+    else:
+        st.session_state.classification_feedback = None
     st.session_state.claimed_places.append({
         "place_name": place["name"],
         "place_type": place["type"],
@@ -778,7 +798,7 @@ def render_distance_challenge():
         <div class="distance-challenge-title">\U0001F4CF Distance Challenge — PostGIS Bonus Round!</div>
         <div class="distance-challenge-places">
             How far is it from <strong>{data['place1']}</strong> ({data['letter1']})
-            to <strong>{data['place2']}</strong> ({data['letter2']})?
+            to <strong>{data['place2']}</strong> ({data['letter2']}) <em>as the crow flies</em>?
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -837,6 +857,7 @@ def render_distance_challenge():
             time.sleep(2)
             st.session_state.distance_challenge_active = False
             st.session_state.distance_challenge_data = None
+            st.session_state.classification_feedback = None
             advance_letter(skip=False)
             st.rerun()
 
@@ -844,6 +865,7 @@ def render_distance_challenge():
         if st.button("\u23ED\uFE0F Skip Challenge", use_container_width=True):
             st.session_state.distance_challenge_active = False
             st.session_state.distance_challenge_data = None
+            st.session_state.classification_feedback = None
             advance_letter(skip=False)
             st.rerun()
 
@@ -867,6 +889,12 @@ def render_game_screen():
         """, unsafe_allow_html=True)
 
         if st.session_state.distance_challenge_active:
+            fb = st.session_state.classification_feedback
+            if fb:
+                if fb["correct"]:
+                    st.success(f"\u2705 **Classification correct!** {fb['place']} is a **{fb['actual']}**. +{fb['points']} points (includes **+5 type bonus**)")
+                else:
+                    st.warning(f"\u274C Not quite — **{fb['place']}** is a **{fb['actual']}**, not a {fb['guessed']}. +{fb['points']} points")
             render_distance_challenge()
         elif st.session_state.awaiting_type_guess:
             pending = st.session_state.pending_result
@@ -1057,11 +1085,13 @@ def render_game_over():
 
     col1, col2 = st.columns([2, 3])
     with col1:
-        st.markdown("### Your journey across the UK")
+        flag = COUNTRY_FLAGS.get(st.session_state.country_filter, COUNTRY_FLAGS[None])
+        label = COUNTRY_NAMES.get(st.session_state.country_filter, "UK")
+        st.markdown(f"### {flag} Your journey across {label}")
         if st.session_state.claimed_places:
             df = pd.DataFrame(st.session_state.claimed_places)
             st.dataframe(
-                df[["letter", "place_name", "place_type", "county", "country", "points"]],
+                df[["place_name", "place_type", "county", "country", "points"]],
                 hide_index=True,
                 use_container_width=True,
             )
