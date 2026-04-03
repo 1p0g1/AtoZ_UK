@@ -407,24 +407,30 @@ div.stInfo > div {
 
 @st.cache_resource
 def get_connection():
-    if "postgres" in st.secrets:
-        cfg = st.secrets["postgres"]
-        return psycopg2.connect(
-            host=cfg["host"], port=cfg.get("port", 5432),
-            dbname=cfg.get("dbname", "postgres"), user=cfg["user"],
-            password=cfg.get("password", ""), sslmode=cfg.get("sslmode", "require"),
-        )
-    host = os.getenv("PG_HOST", "localhost")
-    port = int(os.getenv("PG_PORT", "5432"))
-    dbname = os.getenv("PG_DB", "az_game")
-    user = os.getenv("PG_USER", "pgardner")
-    password = os.getenv("PG_PASSWORD", "")
-    return psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password)
+    try:
+        if "postgres" in st.secrets:
+            cfg = st.secrets["postgres"]
+            return psycopg2.connect(
+                host=cfg["host"], port=cfg.get("port", 5432),
+                dbname=cfg.get("dbname", "postgres"), user=cfg["user"],
+                password=cfg.get("password", ""), sslmode=cfg.get("sslmode", "require"),
+                connect_timeout=5,
+            )
+        host = os.getenv("PG_HOST", "localhost")
+        port = int(os.getenv("PG_PORT", "5432"))
+        dbname = os.getenv("PG_DB", "az_game")
+        user = os.getenv("PG_USER", "postgres")
+        password = os.getenv("PG_PASSWORD", "")
+        return psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password, connect_timeout=5)
+    except psycopg2.OperationalError:
+        return None
 
 
 def run_query(sql, params=None, fetch=True):
     try:
         conn = get_connection()
+        if conn is None:
+            return None
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
             if fetch:
@@ -447,6 +453,8 @@ def run_query(sql, params=None, fetch=True):
 def call_function(sql, params=None):
     try:
         conn = get_connection()
+        if conn is None:
+            return None
         with conn.cursor() as cur:
             cur.execute(sql, params)
             result = cur.fetchone()[0]
@@ -1188,9 +1196,29 @@ England, Scotland, and Wales, categorised as Cities, Towns, Villages, Hamlets, S
 """)
 
 
+def render_sleeping():
+    st.markdown("""
+    <div style="text-align: center; padding: 60px 20px;">
+        <div style="font-size: 4rem; margin-bottom: 16px;">\U0001F634</div>
+        <div style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 800; color: #ffd700; margin-bottom: 12px;">The game is sleeping...</div>
+        <div style="font-family: 'Inter', sans-serif; font-size: 1rem; color: #8fa8c0; line-height: 1.6;">
+            A to Z: UK is available daily from <strong>08:00</strong> to <strong>22:00 UTC</strong>.<br>
+            The database is powered by Snowflake Postgres and takes a well-earned rest overnight.<br><br>
+            Come back tomorrow morning and test your UK geography knowledge!
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 def main():
     init_session_state()
     render_header()
+
+    conn = get_connection()
+    if conn is None:
+        get_connection.clear()
+        render_sleeping()
+        return
 
     if st.session_state.game_over:
         render_game_over()
