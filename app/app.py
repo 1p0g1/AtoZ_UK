@@ -798,7 +798,7 @@ def render_distance_challenge():
         <div class="distance-challenge-title">\U0001F4CF Distance Challenge — PostGIS Bonus Round!</div>
         <div class="distance-challenge-places">
             How far is it from <strong>{data['place1']}</strong> ({data['letter1']})
-            to <strong>{data['place2']}</strong> ({data['letter2']}) <em>as the crow flies</em> "emoji": "\uD83D\uDC26\u200D\u2B1B?"?
+            to <strong>{data['place2']}</strong> ({data['letter2']}) <em>as the crow flies</em>?
         </div>
     </div>
     """, unsafe_allow_html=True)
